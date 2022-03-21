@@ -34,6 +34,8 @@ func prepareCmd(app string, args []string) *exec.Cmd {
 }
 
 func main() {
+	log.SetFlags(0)
+
 	devices, err := ioutil.ReadDir(sysClassNet)
 	if err != nil {
 		log.Fatal(err)
