@@ -1,0 +1,14 @@
+[Unit]
+Description=NIC configuration service
+ConditionFileIsExecutable=/usr/local/sbin/nic-config
+Before=network-pre.target
+Wants=network-pre.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=true
+ExecStart=/usr/local/sbin/nic-config
+ExecStop=/usr/bin/true
+
+[Install]
+WantedBy=multi-user.target
