@@ -36,6 +36,14 @@ func main() {
 	for _, link := range devices {
 		intf := link.Name()
 		fullpath := path.Join(sysClassNet, intf)
+		fi, err := os.Lstat(fullpath)
+		if err != nil {
+			log.Print(err)
+			continue
+		}
+		if fi.Mode()&os.ModeSymlink == 0 {
+			continue
+		}
 		dev, err := os.Readlink(fullpath)
 		if err != nil {
 			log.Print(err)
