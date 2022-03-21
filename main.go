@@ -27,6 +27,12 @@ var (
 	reTX = regexp.MustCompile(`^TX:\s+(\d+)$`)
 )
 
+func prepareCmd(app string, args []string) *exec.Cmd {
+	log.Printf("Running %s %s", app, strings.Join(args, " "))
+
+	return exec.Command(app, args...)
+}
+
 func main() {
 	devices, err := ioutil.ReadDir(sysClassNet)
 	if err != nil {
@@ -55,11 +61,9 @@ func main() {
 			continue
 		}
 
-		log.Printf("Running %s -g %s\n", ethTool, intf)
-
 		var stdout, stderr bytes.Buffer
 
-		cmd := exec.Command(ethTool, "-g", intf)
+		cmd := prepareCmd(ethTool, []string{"-g", intf})
 		cmd.Stdout = &stdout
 		cmd.Stderr = &stderr
 		err = cmd.Run()
@@ -123,6 +127,35 @@ func main() {
 			continue
 		}
 
-		log.Printf("%s: rxmax %d txmax %d rxcur %d txcur %d", intf, rxMaxInt, txMaxInt, rxCurInt, txCurInt)
+		args := []string{"-G", intf}
+		initLen := len(args)
+
+		if rxCurInt < rxMaxInt {
+			args = append(args, "rx")
+			args = append(args, rxMax)
+		}
+
+		if txCurInt < txMaxInt {
+			args = append(args, "tx")
+			args = append(args, txMax)
+		}
+
+		if len(args) <= initLen {
+			// Nothing to do.
+			continue
+		}
+
+		cmd = prepareCmd(ethTool, args)
+		cmd.Stderr = &stderr
+		err = cmd.Run()
+
+		if stderr.Len() > 0 {
+			log.Print(stderr.String())
+		}
+
+		if err != nil {
+			log.Print(err)
+			continue
+		}
 	}
 }
