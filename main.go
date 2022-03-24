@@ -112,21 +112,29 @@ func main() {
 
 		var rxMaxInt, txMaxInt, rxCurInt, txCurInt int64
 
-		if rxMaxInt, err = strconv.ParseInt(rxMax, 10, 64); err != nil {
-			log.Print(err)
-			continue
+		if rxMax != "" {
+			if rxMaxInt, err = strconv.ParseInt(rxMax, 10, 64); err != nil {
+				log.Print(err)
+				continue
+			}
 		}
-		if txMaxInt, err = strconv.ParseInt(txMax, 10, 64); err != nil {
-			log.Print(err)
-			continue
+		if txMax != "" {
+			if txMaxInt, err = strconv.ParseInt(txMax, 10, 64); err != nil {
+				log.Print(err)
+				continue
+			}
 		}
-		if rxCurInt, err = strconv.ParseInt(rxCur, 10, 64); err != nil {
-			log.Print(err)
-			continue
+		if rxCur != "" {
+			if rxCurInt, err = strconv.ParseInt(rxCur, 10, 64); err != nil {
+				log.Print(err)
+				continue
+			}
 		}
-		if txCurInt, err = strconv.ParseInt(txCur, 10, 64); err != nil {
-			log.Print(err)
-			continue
+		if txCur != "" {
+			if txCurInt, err = strconv.ParseInt(txCur, 10, 64); err != nil {
+				log.Print(err)
+				continue
+			}
 		}
 
 		args := []string{"-G", intf}
