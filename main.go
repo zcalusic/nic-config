@@ -7,7 +7,6 @@ package main
 import (
 	"bufio"
 	"bytes"
-	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
@@ -36,7 +35,7 @@ func prepareCmd(app string, args []string) *exec.Cmd {
 func main() {
 	log.SetFlags(0)
 
-	devices, err := ioutil.ReadDir(sysClassNet)
+	devices, err := os.ReadDir(sysClassNet)
 	if err != nil {
 		log.Fatal(err)
 	}
