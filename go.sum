@@ -1,0 +1,4 @@
+github.com/safchain/ethtool v0.6.1 h1:mhRnXE1H8fV8TTXh/HdqE4tXtb57r//BQh5pPYMuM5k=
+github.com/safchain/ethtool v0.6.1/go.mod h1:JzoNbG8xeg/BeVeVoMCtCb3UPWoppZZbFpA+1WFh+M0=
+golang.org/x/sys v0.34.0 h1:H5Y5sJ2L2JRdyv7ROF1he/lPdvFsd0mJHFw2ThKHxLA=
+golang.org/x/sys v0.34.0/go.mod h1:BJP2sWEmIv4KK5OTEluFJCKSidICx8ciO85XgH3Ak8k=
