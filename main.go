@@ -80,7 +80,8 @@ func isPhysical(fullpath string) (bool, error) {
 	return !strings.HasPrefix(dev, "../../devices/virtual/"), nil
 }
 
-// run tunes every physical interface listed under root, and returns the exit status.
+// run tunes every physical interface listed under root, carrying on after errors. It returns the exit status, 1 if
+// anything failed.
 func run(root string, dev ringDevice, logger *log.Logger) int {
 	devices, err := os.ReadDir(root)
 	if err != nil {
@@ -88,12 +89,15 @@ func run(root string, dev ringDevice, logger *log.Logger) int {
 		return 1
 	}
 
+	code := 0
+
 	for _, link := range devices {
 		intf := link.Name()
 
 		physical, err := isPhysical(filepath.Join(root, intf))
 		if err != nil {
 			logger.Print(err)
+			code = 1
 			continue
 		}
 		if !physical {
@@ -102,10 +106,11 @@ func run(root string, dev ringDevice, logger *log.Logger) int {
 
 		if err := updateInterface(dev, intf, logger); err != nil {
 			logger.Printf("%s: %v", intf, err)
+			code = 1
 		}
 	}
 
-	return 0
+	return code
 }
 
 func main() {
@@ -113,8 +118,7 @@ func main() {
 
 	eth, err := ethtool.NewEthtool()
 	if err != nil {
-		logger.Print(err)
-		return
+		logger.Fatal(err)
 	}
 
 	code := run(sysClassNet, eth, logger)

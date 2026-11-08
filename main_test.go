@@ -128,6 +128,7 @@ func TestRun(t *testing.T) {
 		wantGets []string
 		wantSets []setCall
 		wantLog  string
+		wantCode int
 	}{
 		{
 			name:     "both below max",
@@ -210,6 +211,7 @@ func TestRun(t *testing.T) {
 			wantGets: []string{"eth0", "eth1"},
 			wantSets: []setCall{{"eth1", maximized}},
 			wantLog:  "eth0: input/output error\neth1: rx 256 -> 4096 | tx 256 -> 4096\n",
+			wantCode: 1,
 		},
 		{
 			name:     "SetRing error, next interface still tuned",
@@ -224,6 +226,7 @@ func TestRun(t *testing.T) {
 			wantGets: []string{"eth0", "eth1"},
 			wantSets: []setCall{{"eth0", maximized}, {"eth1", maximized}},
 			wantLog:  "eth0: input/output error\neth1: rx 256 -> 4096 | tx 256 -> 4096\n",
+			wantCode: 1,
 		},
 		{
 			name:     "no ring support skipped quietly",
@@ -246,6 +249,7 @@ func TestRun(t *testing.T) {
 			wantGets: []string{"eth0"},
 			wantSets: []setCall{{"eth0", maximized}},
 			wantLog:  "eth0: operation not supported\n",
+			wantCode: 1,
 		},
 	}
 
@@ -254,8 +258,8 @@ func TestRun(t *testing.T) {
 			root := makeTree(t, tt.physical, tt.virtual, tt.files)
 
 			var buf bytes.Buffer
-			if code := run(root, &tt.dev, log.New(&buf, "", 0)); code != 0 {
-				t.Errorf("exit status = %d, want 0", code)
+			if code := run(root, &tt.dev, log.New(&buf, "", 0)); code != tt.wantCode {
+				t.Errorf("exit status = %d, want %d", code, tt.wantCode)
 			}
 
 			if !slices.Equal(tt.dev.gets, tt.wantGets) {
