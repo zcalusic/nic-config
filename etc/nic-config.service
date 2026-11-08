@@ -8,6 +8,8 @@ Wants=network-pre.target
 Type=oneshot
 RemainAfterExit=true
 ExecStart=/usr/local/sbin/nic-config
+CapabilityBoundingSet=CAP_NET_ADMIN
+NoNewPrivileges=true
 
 [Install]
 WantedBy=multi-user.target
