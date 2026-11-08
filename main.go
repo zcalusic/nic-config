@@ -95,7 +95,7 @@ func run(root string, dev ringDevice, logger *log.Logger) int {
 		}
 
 		if err := updateInterface(dev, intf, logger); err != nil {
-			logger.Print(err)
+			logger.Printf("%s: %v", intf, err)
 		}
 	}
 

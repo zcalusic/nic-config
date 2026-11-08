@@ -208,7 +208,7 @@ func TestRun(t *testing.T) {
 			},
 			wantGets: []string{"eth0", "eth1"},
 			wantSets: []setCall{{"eth1", maximized}},
-			wantLog:  "operation not supported\neth1: rx 256 -> 4096 | tx 256 -> 4096\n",
+			wantLog:  "eth0: operation not supported\neth1: rx 256 -> 4096 | tx 256 -> 4096\n",
 		},
 		{
 			name:     "SetRing error, next interface still tuned",
@@ -222,7 +222,7 @@ func TestRun(t *testing.T) {
 			},
 			wantGets: []string{"eth0", "eth1"},
 			wantSets: []setCall{{"eth0", maximized}, {"eth1", maximized}},
-			wantLog:  "operation not supported\neth1: rx 256 -> 4096 | tx 256 -> 4096\n",
+			wantLog:  "eth0: operation not supported\neth1: rx 256 -> 4096 | tx 256 -> 4096\n",
 		},
 	}
 
