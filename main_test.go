@@ -12,12 +12,13 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"syscall"
 	"testing"
 
 	"github.com/safchain/ethtool"
 )
 
-var errNotSupported = errors.New("operation not supported")
+var errFailed = errors.New("input/output error")
 
 type setCall struct {
 	intf string
@@ -204,11 +205,11 @@ func TestRun(t *testing.T) {
 			physical: []string{"eth0", "eth1"},
 			dev: fakeDevice{
 				rings:  map[string]ethtool.Ring{"eth1": newRing(256, 4096, 256, 4096)},
-				getErr: map[string]error{"eth0": errNotSupported},
+				getErr: map[string]error{"eth0": errFailed},
 			},
 			wantGets: []string{"eth0", "eth1"},
 			wantSets: []setCall{{"eth1", maximized}},
-			wantLog:  "eth0: operation not supported\neth1: rx 256 -> 4096 | tx 256 -> 4096\n",
+			wantLog:  "eth0: input/output error\neth1: rx 256 -> 4096 | tx 256 -> 4096\n",
 		},
 		{
 			name:     "SetRing error, next interface still tuned",
@@ -218,11 +219,33 @@ func TestRun(t *testing.T) {
 					"eth0": newRing(256, 4096, 256, 4096),
 					"eth1": newRing(256, 4096, 256, 4096),
 				},
-				setErr: map[string]error{"eth0": errNotSupported},
+				setErr: map[string]error{"eth0": errFailed},
 			},
 			wantGets: []string{"eth0", "eth1"},
 			wantSets: []setCall{{"eth0", maximized}, {"eth1", maximized}},
-			wantLog:  "eth0: operation not supported\neth1: rx 256 -> 4096 | tx 256 -> 4096\n",
+			wantLog:  "eth0: input/output error\neth1: rx 256 -> 4096 | tx 256 -> 4096\n",
+		},
+		{
+			name:     "no ring support skipped quietly",
+			physical: []string{"eth0", "eth1"},
+			dev: fakeDevice{
+				rings:  map[string]ethtool.Ring{"eth1": newRing(256, 4096, 256, 4096)},
+				getErr: map[string]error{"eth0": syscall.EOPNOTSUPP},
+			},
+			wantGets: []string{"eth0", "eth1"},
+			wantSets: []setCall{{"eth1", maximized}},
+			wantLog:  "eth1: rx 256 -> 4096 | tx 256 -> 4096\n",
+		},
+		{
+			name:     "SetRing not supported still reported",
+			physical: []string{"eth0"},
+			dev: fakeDevice{
+				rings:  map[string]ethtool.Ring{"eth0": newRing(256, 4096, 256, 4096)},
+				setErr: map[string]error{"eth0": syscall.EOPNOTSUPP},
+			},
+			wantGets: []string{"eth0"},
+			wantSets: []setCall{{"eth0", maximized}},
+			wantLog:  "eth0: operation not supported\n",
 		},
 	}
 

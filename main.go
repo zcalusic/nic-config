@@ -6,10 +6,12 @@
 package main
 
 import (
+	"errors"
 	"log"
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 
 	"github.com/safchain/ethtool"
 )
@@ -36,6 +38,10 @@ func maximizeRing(ring ethtool.Ring) (ethtool.Ring, bool) {
 
 func updateInterface(dev ringDevice, intf string, logger *log.Logger) error {
 	ring, err := dev.GetRing(intf)
+	if errors.Is(err, syscall.EOPNOTSUPP) {
+		// The driver has no ring parameters to tune.
+		return nil
+	}
 	if err != nil {
 		return err
 	}
