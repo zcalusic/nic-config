@@ -7,6 +7,9 @@ package main
 
 import (
 	"errors"
+	"flag"
+	"fmt"
+	"io"
 	"log"
 	"os"
 	"path/filepath"
@@ -18,12 +21,32 @@ import (
 
 const (
 	sysClassNet = "/sys/class/net"
+
+	usage = `Usage: nic-config [-h] [-version] [-n]
+
+Raises the rx/tx ring parameters of all physical network interfaces to their maximum values.
+
+  -h        show this help
+  -version  show the version
+  -n        show what would change, without changing it
+`
 )
 
 // ringDevice is the part of ethtool that nic-config uses, so that tests can replace real NICs.
 type ringDevice interface {
 	GetRing(intf string) (ethtool.Ring, error)
 	SetRing(intf string, ring ethtool.Ring) (ethtool.Ring, error)
+	Close()
+}
+
+// dryRunDevice reads from the wrapped device, but never changes it.
+type dryRunDevice struct {
+	ringDevice
+}
+
+// SetRing pretends that the driver applied the request as is.
+func (dryRunDevice) SetRing(_ string, ring ethtool.Ring) (ethtool.Ring, error) {
+	return ring, nil
 }
 
 // maximizeRing raises the rx/tx ring sizes to their maximums, and reports whether that changed anything.
@@ -80,9 +103,9 @@ func isPhysical(fullpath string) (bool, error) {
 	return !strings.HasPrefix(dev, "../../devices/virtual/"), nil
 }
 
-// run tunes every physical interface listed under root, carrying on after errors. It returns the exit status, 1 if
+// tune tunes every physical interface listed under root, carrying on after errors. It returns the exit status, 1 if
 // anything failed.
-func run(root string, dev ringDevice, logger *log.Logger) int {
+func tune(root string, dev ringDevice, logger *log.Logger) int {
 	devices, err := os.ReadDir(root)
 	if err != nil {
 		logger.Print(err)
@@ -113,15 +136,52 @@ func run(root string, dev ringDevice, logger *log.Logger) int {
 	return code
 }
 
-func main() {
-	logger := log.New(os.Stderr, "", 0)
+// run handles the command line args, and only opens the device if there is tuning to do. It returns the exit status.
+func run(args []string, root string, open func() (ringDevice, error), stdout, stderr io.Writer) int {
+	flags := flag.NewFlagSet("nic-config", flag.ContinueOnError)
+	flags.SetOutput(io.Discard) // messages are printed below
+	version := flags.Bool("version", false, "")
+	dryRun := flags.Bool("n", false, "")
 
-	eth, err := ethtool.NewEthtool()
-	if err != nil {
-		logger.Fatal(err)
+	err := flags.Parse(args)
+	if err == nil && flags.NArg() > 0 {
+		err = fmt.Errorf("unexpected argument %q", flags.Arg(0))
 	}
 
-	code := run(sysClassNet, eth, logger)
-	eth.Close()
-	os.Exit(code)
+	switch {
+	case errors.Is(err, flag.ErrHelp):
+		_, _ = fmt.Fprint(stdout, usage)
+
+		return 0
+	case err != nil:
+		_, _ = fmt.Fprintf(stderr, "nic-config: %v\n%s", err, usage)
+
+		return 2
+	case *version:
+		_, _ = fmt.Fprintf(stdout, "nic-config %s\n", Version)
+
+		return 0
+	}
+
+	logger := log.New(stderr, "", 0)
+
+	dev, err := open()
+	if err != nil {
+		logger.Print(err)
+		return 1
+	}
+	defer dev.Close()
+
+	if *dryRun {
+		logger.SetPrefix("dry run: ")
+		dev = dryRunDevice{dev}
+	}
+
+	return tune(root, dev, logger)
+}
+
+func main() {
+	open := func() (ringDevice, error) { return ethtool.NewEthtool() }
+
+	os.Exit(run(os.Args[1:], sysClassNet, open, os.Stdout, os.Stderr))
 }

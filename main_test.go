@@ -32,8 +32,9 @@ type fakeDevice struct {
 	getErr  map[string]error
 	setErr  map[string]error
 
-	gets []string
-	sets []setCall
+	gets   []string
+	sets   []setCall
+	closes int
 }
 
 func (f *fakeDevice) GetRing(intf string) (ethtool.Ring, error) {
@@ -53,6 +54,10 @@ func (f *fakeDevice) SetRing(intf string, ring ethtool.Ring) (ethtool.Ring, erro
 		return applied, nil
 	}
 	return ring, nil
+}
+
+func (f *fakeDevice) Close() {
+	f.closes++
 }
 
 func newRing(rx, rxMax, tx, txMax uint32) ethtool.Ring {
@@ -116,7 +121,7 @@ func TestMaximizeRing(t *testing.T) {
 	}
 }
 
-func TestRun(t *testing.T) {
+func TestTune(t *testing.T) {
 	maximized := newRing(4096, 4096, 4096, 4096)
 
 	tests := []struct {
@@ -258,7 +263,7 @@ func TestRun(t *testing.T) {
 			root := makeTree(t, tt.physical, tt.virtual, tt.files)
 
 			var buf bytes.Buffer
-			if code := run(root, &tt.dev, log.New(&buf, "", 0)); code != tt.wantCode {
+			if code := tune(root, &tt.dev, log.New(&buf, "", 0)); code != tt.wantCode {
 				t.Errorf("exit status = %d, want %d", code, tt.wantCode)
 			}
 
@@ -275,12 +280,12 @@ func TestRun(t *testing.T) {
 	}
 }
 
-func TestRunMissingRoot(t *testing.T) {
+func TestTuneMissingRoot(t *testing.T) {
 	var dev fakeDevice
 	var buf bytes.Buffer
 
 	root := filepath.Join(t.TempDir(), "missing")
-	if code := run(root, &dev, log.New(&buf, "", 0)); code != 1 {
+	if code := tune(root, &dev, log.New(&buf, "", 0)); code != 1 {
 		t.Errorf("exit status = %d, want 1", code)
 	}
 	if len(dev.gets) != 0 {
@@ -288,6 +293,109 @@ func TestRunMissingRoot(t *testing.T) {
 	}
 	if got := buf.String(); !strings.Contains(got, root) {
 		t.Errorf("log = %q, want it to name %q", got, root)
+	}
+}
+
+func TestRun(t *testing.T) {
+	versionLine := "nic-config " + Version + "\n"
+	tuned := "eth0: rx 256 -> 4096 | tx 256 -> 4096\n"
+	maximized := []setCall{{"eth0", newRing(4096, 4096, 4096, 4096)}}
+
+	tests := []struct {
+		name       string
+		args       []string
+		getErr     error
+		openErr    error
+		wantCode   int
+		wantStdout string
+		wantStderr string
+		wantOpens  int
+		wantSets   []setCall
+	}{
+		{name: "no arguments tunes", wantStderr: tuned, wantOpens: 1, wantSets: maximized},
+		{name: "version", args: []string{"-version"}, wantStdout: versionLine},
+		{name: "version with two dashes", args: []string{"--version"}, wantStdout: versionLine},
+		{name: "short help", args: []string{"-h"}, wantStdout: usage},
+		{name: "long help", args: []string{"-help"}, wantStdout: usage},
+		{
+			name:       "unknown flag",
+			args:       []string{"-bogus"},
+			wantCode:   2,
+			wantStderr: "nic-config: flag provided but not defined: -bogus\n" + usage,
+		},
+		{
+			name:       "stray argument",
+			args:       []string{"extra"},
+			wantCode:   2,
+			wantStderr: "nic-config: unexpected argument \"extra\"\n" + usage,
+		},
+		{
+			name:       "stray argument after a flag",
+			args:       []string{"-n", "extra"},
+			wantCode:   2,
+			wantStderr: "nic-config: unexpected argument \"extra\"\n" + usage,
+		},
+		{name: "dry run changes nothing", args: []string{"-n"}, wantStderr: "dry run: " + tuned, wantOpens: 1},
+		{
+			name:       "dry run reports errors",
+			args:       []string{"-n"},
+			getErr:     errFailed,
+			wantCode:   1,
+			wantStderr: "dry run: eth0: input/output error\n",
+			wantOpens:  1,
+		},
+		{
+			name:       "device can't be opened",
+			openErr:    errFailed,
+			wantCode:   1,
+			wantStderr: "input/output error\n",
+			wantOpens:  1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			root := makeTree(t, []string{"eth0"}, nil, nil)
+			dev := fakeDevice{
+				rings:  map[string]ethtool.Ring{"eth0": newRing(256, 4096, 256, 4096)},
+				getErr: map[string]error{"eth0": tt.getErr},
+			}
+
+			opens := 0
+			open := func() (ringDevice, error) {
+				opens++
+				if tt.openErr != nil {
+					return nil, tt.openErr
+				}
+				return &dev, nil
+			}
+
+			var stdout, stderr bytes.Buffer
+			if code := run(tt.args, root, open, &stdout, &stderr); code != tt.wantCode {
+				t.Errorf("exit status = %d, want %d", code, tt.wantCode)
+			}
+
+			if got := stdout.String(); got != tt.wantStdout {
+				t.Errorf("stdout = %q, want %q", got, tt.wantStdout)
+			}
+			if got := stderr.String(); got != tt.wantStderr {
+				t.Errorf("stderr = %q, want %q", got, tt.wantStderr)
+			}
+			if opens != tt.wantOpens {
+				t.Errorf("device opened %d times, want %d", opens, tt.wantOpens)
+			}
+			if !slices.Equal(dev.sets, tt.wantSets) {
+				t.Errorf("SetRing calls = %+v, want %+v", dev.sets, tt.wantSets)
+			}
+
+			wantCloses := tt.wantOpens
+			if tt.openErr != nil {
+				wantCloses = 0
+			}
+			if dev.closes != wantCloses {
+				t.Errorf("device closed %d times, want %d", dev.closes, wantCloses)
+			}
+		})
 	}
 }
 
